@@ -1,0 +1,10 @@
+Import('*')
+env.addSources(Split("""ascii/ascii_inst.c
+						standard/standard_inst.c"""))
+
+env.addHeaders(Split("""ascii/ascii_inst.h
+						standard/standard_inst.h"""))
+
+if env['HAS_ICU']:
+	env.addSources(['unicode/unicode_inst.c'])
+	env.addHeaders(['unicode/unicode_inst.h'])

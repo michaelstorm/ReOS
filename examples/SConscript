@@ -1,0 +1,8 @@
+Import('*')
+SConscript('ascii/SConscript')
+
+if env['HAS_ICU']:
+	SConscript('unicode/SConscript')
+
+if conf.CheckLibWithHeader('cxcore', 'opencv/cv.h', 'c++') and conf.CheckLibWithHeader('highgui', 'opencv/highgui.h', 'c++'):
+	SConscript('image/SConscript')

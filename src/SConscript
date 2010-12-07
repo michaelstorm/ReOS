@@ -1,0 +1,3 @@
+Import('*')
+for subdir in ['debuggers', 'expression_compilers', 'input', 'instruction_sets', 'kernel', 'tree_compilers']:
+	SConscript('%s/SConscript' % subdir)

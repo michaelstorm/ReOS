@@ -1,0 +1,8 @@
+Import('*')
+sources = 'build/main.c'
+
+VariantDir('build', 'src')
+bin = env.Program('#bin/unicode', sources, LIBPATH = '#lib', LIBS = ['pikere'])
+
+Alias('examples', bin)
+Alias('unicode_example', bin)

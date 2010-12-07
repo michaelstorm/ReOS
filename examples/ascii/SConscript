@@ -1,0 +1,8 @@
+Import('*')
+sources = 'build/main.c'
+
+VariantDir('build', 'src')
+bin = env.Program('#bin/ascii', sources, LIBPATH = '#lib', LIBS = 'reos')
+
+Alias('examples', bin)
+Alias('ascii_example', bin)

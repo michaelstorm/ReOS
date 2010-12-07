@@ -1,0 +1,7 @@
+Import('*')
+env.addSources(['ascii/ascii_input.c'])
+env.addHeaders(['ascii/ascii_input.h'])
+
+if env['HAS_ICU']:
+	env.addSources(['unicode/unicode_input.c'])
+	env.addHeaders(['unicode/unicode_input.h'])

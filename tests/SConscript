@@ -1,0 +1,12 @@
+Import('*')
+
+VariantDir('build', 'src')
+bench_lists = env.Program('bin/bench_lists', 'build/bench_lists.c', LIBPATH = '#lib', LIBS = 'pikere')
+
+# override system pcre
+#pcredemo = env.Program('bin/pcredemo', 'build/pcredemo.c', LIBPATH = ['#lib', '/usr/local/lib'], LIBS = ['pikere', 'pcre'])
+
+Alias('tests', bench_lists)
+#Alias('tests', pcredemo)
+Alias('bench_lists', bin)
+#Alias('pcredemo', pcredemo)

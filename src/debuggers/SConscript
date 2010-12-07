@@ -1,0 +1,30 @@
+import os
+
+Import('*')
+
+env.addHeaders(Split("""percent_debugger.h
+						profile_debugger.h
+						shell_debugger.h"""))
+
+env.addSources(Split("""percent_debugger.c
+						profile_debugger.c
+						shell_debugger.c"""))
+
+antlrSources = ['shell_debug.g']
+for antlrSource in antlrSources:
+	sourceName = os.path.splitext(antlrSource)[0]
+	suffixes = ['Lexer.h', 'Parser.h', 'Lexer.c', 'Parser.c', '.tokens']
+	prefix = Dir('.').abspath + '/' + sourceName
+	targets = [prefix + suffix for suffix in suffixes]
+
+	antlrTargets = env.Command(targets, antlrSource,
+								'java org.antlr.Tool -fo '
+								+ Dir('.').abspath + '/' + os.path.dirname(antlrSource)
+								+ ' ' + Dir('.').abspath + '/' + antlrSource)
+	env.addSources([str(t) for t in antlrTargets if not str(t).endswith('.h') and not str(t).endswith('.tokens')])
+
+	copyAntlr = [env.Command(Dir('.').srcnode().abspath + '/' + sourceName + suffix,
+						prefix + suffix, Copy("$TARGET", "$SOURCE"))
+					for suffix in suffixes]
+	env.NoClean(copyAntlr)
+	env.Alias('re', copyAntlr)

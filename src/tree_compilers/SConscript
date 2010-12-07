@@ -1,0 +1,13 @@
+Import('*')
+env.addSources(Split("""ascii/ascii_tree.c
+						standard/standard_tree.c
+						string/string_tree.c"""))
+
+env.addHeaders(Split("""ascii/ascii_tree.h
+						standard/standard_tree.h
+						string/string_tree.h"""))
+
+libs = []
+if env['HAS_ICU']:
+	env.addSources(['unicode/unicode_tree.c'])
+	env.addHeaders(['unicode/unicode_tree.h'])

@@ -1,0 +1,52 @@
+import os
+
+Import('*')
+env.addSources(['ascii/ascii_expression.c'])
+env.addHeaders(['ascii/ascii_expression.h', 'ascii/ascii_lex.h', 'ascii/ascii_parse.h'])
+
+antlrSources = []
+bisonSources = ['ascii/ascii_parse.y']
+flexSources = ['ascii/ascii_lex.l']
+
+if env['HAS_ICU']:
+	env.addSources(['unicode/unicode_expression.c'])
+	env.addHeaders(['unicode/unicode_expressionLexer.h', 'unicode/unicode_expressionParser.h'])
+	antlrSources += ['unicode/unicode_expression.g']
+
+if env['HAS_ANTLR']:
+	env.addSources(['string/string_expression.c'])
+	env.addHeaders(['string/string_expressionLexer.h', 'string/string_expressionParser.h'])
+	antlrSources += ['string/string_expression.g']
+
+for file in bisonSources:
+	bisonTargets = env.CFile(source = file, YACCFLAGS = '-y -d')
+	env.addSources([str(t) for t in bisonTargets if not str(t).endswith('.h')])
+
+for file in flexSources:
+	flexHeaderPath = Dir('.').abspath + '/' + os.path.splitext(file)[0] + '.h'
+	scannerTargets = env.CFile(source = file, LEXFLAGS = '--header-file=' + flexHeaderPath)
+	env.addSources([str(t) for t in scannerTargets if not str(t).endswith('.h')])
+
+copyFlexBison = [env.Command(Dir('.').srcnode().abspath + '/' + str(t),
+						str(t), Copy("$TARGET", "$SOURCE"))
+					for t in bisonTargets + scannerTargets]
+env.NoClean(copyFlexBison)
+env.Alias('re', copyFlexBison)
+
+for antlrSource in antlrSources:
+	sourceName = os.path.splitext(antlrSource)[0]
+	suffixes = ['Lexer.h', 'Parser.h', 'Lexer.c', 'Parser.c', '.tokens']
+	prefix = Dir('.').abspath + '/' + sourceName
+	targets = [prefix + suffix for suffix in suffixes]
+
+	antlrTargets = env.Command(targets, antlrSource,
+								'java org.antlr.Tool -fo '
+								+ Dir('.').abspath + '/' + os.path.dirname(antlrSource)
+								+ ' ' + Dir('.').abspath + '/' + antlrSource)
+	env.addSources([str(t) for t in antlrTargets if not str(t).endswith('.h') and not str(t).endswith('.tokens')])
+
+	copyAntlr = [env.Command(Dir('.').srcnode().abspath + '/' + sourceName + suffix,
+						prefix + suffix, Copy("$TARGET", "$SOURCE"))
+					for suffix in suffixes]
+	env.NoClean(copyAntlr)
+	env.Alias('re', copyAntlr)

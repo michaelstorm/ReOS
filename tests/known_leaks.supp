@@ -1,0 +1,14 @@
+{
+   yacc
+   Memcheck:Leak
+   fun:malloc
+   fun:yyalloc
+   fun:yyensure_buffer_stack
+   fun:yy_switch_to_buffer
+   fun:yy_scan_buffer
+   fun:yy_scan_bytes
+   fun:yy_scan_string
+   fun:ascii_expression_compile
+   fun:main
+}
+

@@ -1,0 +1,18 @@
+Import('*')
+env.addSources(Split("""reos_buffer.c
+						reos_capture.c
+						reos_debugger.c
+						reos_kernel.c
+						reos_list.c
+						reos_pattern.c
+						reos_thread.c"""))
+
+env.addHeaders(Split("""judy_macros.h
+						reos_buffer.h
+						reos_capture.h
+						reos_debugger.h
+						reos_list.h
+						reos_kernel.h
+						reos_pattern.h
+						reos_thread.h
+						reos_types.h"""))
