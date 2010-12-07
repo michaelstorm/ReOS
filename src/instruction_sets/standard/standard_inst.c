@@ -140,12 +140,7 @@ static int execute_branch(ReOS_Kernel *k, ReOS_Thread *thread, int jmp_pc, int j
 	join->join_root = joinroot_clone(thread->join_root);
 
 	// add the new branch to the tree
-	if (thread->split) {
-		reos_simplelist_push_tail(current_branch->or_children, child_branch);
-		join->split = 0;
-	}
-	else
-		reos_simplelist_push_tail(current_branch->and_children, child_branch);
+	reos_simplelist_push_tail(current_branch->children, child_branch);
 
 	child_branch->parent = current_branch;
 
@@ -195,6 +190,10 @@ int execute_standard_inst(ReOS_Kernel *k, ReOS_Thread *thread, ReOS_Inst *inst, 
 		if (thread->refs) {
 			ReOS_Branch *match_branch = reos_compoundlist_peek_tail(thread->refs);
 			match_branch->matched = 1;
+			
+			if (!match_branch->matches)
+				match_branch->matches = new_reos_compoundlist(4, 0, 0);
+			reos_compoundlist_push_tail(match_branch->matches, reos_compoundlist_clone(thread->deps));
 
 	//		if (match_branch->negated)
 		//		return ReOS_InstRetDrop;
@@ -225,7 +224,6 @@ int execute_standard_inst(ReOS_Kernel *k, ReOS_Thread *thread, ReOS_Inst *inst, 
 	case OpSplit:
 	{
 		thread->pc = args->x;
-		thread->split = 1;
 
 		// clone the thread
 		ReOS_Thread *split = reos_thread_clone(thread);

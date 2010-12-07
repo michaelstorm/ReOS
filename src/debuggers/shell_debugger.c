@@ -522,21 +522,12 @@ static void print_branch_tree(ReOS_Branch *b, int indent)
 	else
 		printf("%p:%d\n", b, b->num_threads);
 
-	if (reos_simplelist_has_next(b->and_children)) {
+	if (reos_simplelist_has_next(b->children)) {
 		for (i = 0; i < indent; i++)
 			printf("\t");
-		printf("\tand_children:\n");
+		printf("\tchildren:\n");
 
-		foreach_simple(ReOS_Branch, child, b->and_children)
-			print_branch_tree(child, indent+1);
-	}
-
-	if (reos_simplelist_has_next(b->or_children)) {
-		for (i = 0; i < indent; i++)
-			printf("\t");
-		printf("\tor_children:\n");
-
-		foreach_simple(ReOS_Branch, child, b->or_children)
+		foreach_simple(ReOS_Branch, child, b->children)
 			print_branch_tree(child, indent+1);
 	}
 }

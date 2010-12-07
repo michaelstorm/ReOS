@@ -257,8 +257,8 @@ struct ReOS_Branch
 	int matched;
 	int negated;
 	ReOS_Branch *parent;
-	ReOS_SimpleList *and_children;
-	ReOS_SimpleList *or_children;
+	ReOS_SimpleList *children;
+	ReOS_CompoundList *matches;
 };
 
 struct Call
@@ -270,7 +270,6 @@ struct Call
 struct ReOS_Thread
 {
 	int pc;
-	int split;
 	ReOS_BackrefBuffer *backref_buffer;
 	ReOS_CaptureSet *capture_set;
 	ReOS_JoinRoot *join_root;

@@ -561,16 +561,14 @@ ReOS_CompoundList *reos_compoundlist_clone(ReOS_CompoundList *l)
 
 ReOS_CompoundListImpl *reos_compoundlistimpl_clone(ReOS_CompoundListImpl *impl)
 {
-	ReOS_CompoundListImpl *clone_impl = new_reos_compoundlistimpl(CLIST_MAX_LEN(impl->head),
-														impl->destructor,
-														impl->clone_element);
+	ReOS_CompoundListImpl *clone_impl = new_reos_compoundlistimpl(CLIST_MAX_LEN(impl->head), impl->destructor,
+												 impl->clone_element);
 
 	ReOS_CompoundListNode *clone_prev;
 	ReOS_CompoundListNode *clone_node = 0;
 	ReOS_CompoundListNode *node = impl->head;
 
-	clone_impl->head = reos_compoundlistnode_clone(impl->head,
-											  impl->clone_element);
+	clone_impl->head = reos_compoundlistnode_clone(impl->head, impl->clone_element);
 	clone_prev = clone_impl->head;
 	node = impl->head->next;
 

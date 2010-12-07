@@ -42,7 +42,6 @@ ReOS_Thread *new_reos_thread(ReOS_CompoundList *free_thread_list, int pc)
 	}
 
 	t->pc = pc;
-	t->split = 0;
 	t->backref_buffer = 0;
 	t->join_root = 0;
 	return t;
@@ -79,7 +78,6 @@ void delete_reos_thread(ReOS_Thread *t)
 ReOS_Thread *reos_thread_clone(ReOS_Thread *t)
 {
 	ReOS_Thread *clone = new_reos_thread(t->free_thread_list, t->pc);
-	clone->split = t->split;
 	clone->capture_set = t->capture_set;
 	clone->join_root = t->join_root;
 	clone->backref_buffer = t->backref_buffer;
@@ -234,8 +232,7 @@ static void thread_deref_branches(ReOS_Thread *t)
 static void free_reos_branch_tree(ReOS_Branch *branch)
 {
 	if (branch) {
-		free_reos_simplelist(branch->and_children);
-		free_reos_simplelist(branch->or_children);
+		free_reos_simplelist(branch->children);
 		free(branch);
 	}
 }
@@ -248,8 +245,8 @@ ReOS_Branch *new_reos_branch(int neg)
 	t->matched = 0;
 	t->negated = neg;
 	t->parent = 0;
-	t->and_children = new_reos_simplelist((VoidPtrFunc)free_reos_branch_tree);
-	t->or_children = new_reos_simplelist((VoidPtrFunc)free_reos_branch_tree);
+	t->children = new_reos_simplelist((VoidPtrFunc)free_reos_branch_tree);
+	t->matches = 0;
 
 	return t;
 }

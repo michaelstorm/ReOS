@@ -81,8 +81,7 @@ static void push_threadlist(ReOS_Kernel *k, ReOS_ThreadList *threadlist,
 
 void reos_kernel_push_current_threadlist(ReOS_Kernel *k, ReOS_Thread *thread, int backtrack)
 {
-	push_threadlist(k, k->state.current_thread_list, thread,
-								backtrack);
+	push_threadlist(k, k->state.current_thread_list, thread, backtrack);
 }
 
 void reos_kernel_push_next_threadlist(ReOS_Kernel *k, ReOS_Thread *thread, int backtrack)
