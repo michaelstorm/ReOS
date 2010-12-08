@@ -256,6 +256,7 @@ struct ReOS_Branch
 	int num_threads;
 	int matched;
 	int negated;
+	int marked;
 	ReOS_Branch *parent;
 	ReOS_SimpleList *children;
 	ReOS_CompoundList *matches;

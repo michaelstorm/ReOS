@@ -141,7 +141,7 @@ int shell_debugger_display(ReOS_Debugger *debugger, ShellDebuggerCommand *comman
 {
 	ShellDebuggerData *data = debugger->data;
 	if (!reos_simplelist_has_next(command->options)) {
-		printf("ReOS_State:\n");
+		printf("State:\n");
 		shell_debugger_print_state(data, k);
 		data->display |= DISPLAY_STATE;
 		
@@ -411,7 +411,7 @@ void shell_debugger_prompt(ReOS_Debugger *debugger, ReOS_Kernel *k)
 	ShellDebuggerData *data = debugger->data;
 
 	if (data->display & DISPLAY_STATE) {
-		printf("ReOS_State:\n");
+		printf("State:\n");
 		shell_debugger_print_state(data, k);
 	}
 	if (data->display & DISPLAY_INPUT) {
@@ -496,7 +496,7 @@ void shell_debugger_print_state(ShellDebuggerData *debugger_data, ReOS_Kernel *k
 	printf("%p\n", k->state.next_thread_list->list->impl);
 
 	if (debugger_data->print_inst) {
-		printf("ReOS_Threads:\n");
+		printf("Threads:\n");
 		printf("\tCurrent:\n");
 		shell_debugger_print_threadlist(debugger_data, k, k->state.current_thread_list, 1);
 
@@ -510,6 +510,7 @@ void shell_debugger_print_state(ShellDebuggerData *debugger_data, ReOS_Kernel *k
 
 static void print_branch_tree(ReOS_Branch *b, int indent)
 {
+	printf("\t\tBranch tree:\n");
 	int i;
 	for (i = 0; i < indent; i++)
 		printf("\t");
@@ -550,7 +551,7 @@ void shell_debugger_print_threadlist(ShellDebuggerData *debugger_data, ReOS_Kern
 		printf("\n");
 
 		if (thread->join_root && joinroot_get_root_branch(thread->join_root))
-			print_branch_tree(joinroot_get_root_branch(thread->join_root), 2);
+			;//print_branch_tree(joinroot_get_root_branch(thread->join_root), 2);
 	}
 }
 
@@ -559,36 +560,6 @@ void shell_debugger_print_thread(ShellDebuggerData *debugger_data, ReOS_Kernel *
 	ReOS_Inst *inst = k->pattern->get_inst(k->pattern, thread->pc);
 	if (debugger_data->print_inst)
 		debugger_data->print_inst(inst);
-
-	if (thread->deps || thread->refs) {
-		printf(" deps: {");
-		if (thread->deps) {
-			foreach_compound(ReOS_Branch, branch, thread->deps) {
-				if (branch->negated)
-					printf("(!)");
-
-				if (branch->matched)
-					printf("%p:m, ", branch);
-				else
-					printf("%p:%d, ", branch, branch->num_threads);
-			}
-		}
-
-		printf("} refs: {");
-		if (thread->refs) {
-			foreach_compound(ReOS_Branch, branch, thread->refs) {
-				if (branch->negated)
-					printf("(!)");
-
-				if (branch->matched)
-					printf("%p:m, ", branch);
-				else
-					printf("%p:%d, ", branch, branch->num_threads);
-			}
-		}
-
-		printf("}");
-	}
 
 	ReOS_CaptureSet *capture_set = thread->capture_set;
 	if (capture_set->captures) {
@@ -610,6 +581,47 @@ void shell_debugger_print_thread(ShellDebuggerData *debugger_data, ReOS_Kernel *
 			printf("}, ");
 
 			reos_judylist_iter_next(capture_list, capture_set->captures);
+		}
+	}
+
+	if (thread->deps || thread->refs) {
+		printf(" ref: ");
+		if (thread->refs) {
+			ReOS_Branch *branch = reos_compoundlist_peek_head(thread->refs);
+			if (branch->negated)
+				printf("(!)");
+
+			if (branch->matched)
+				printf("%p:m,", branch);
+			else
+				printf("%p:%d,", branch, branch->num_threads);
+		}
+		printf(" deps:");
+		if (thread->deps) {
+			foreach_compound(ReOS_Branch, branch, thread->deps) {
+				printf("\n\t\t");
+				if (branch->negated)
+					printf("(!)");
+
+				if (branch->matched) {
+					printf("%p:m -> ", branch);
+					foreach_compound(ReOS_CompoundList, match_list, branch->matches) {
+						printf("{");
+						foreach_compound(ReOS_Branch, b, match_list) {
+							if (b->negated)
+								printf("(!)");
+				
+							if (b->matched)
+								printf("%p:m, ", b);
+							else
+								printf("%p:%d, ", b, b->num_threads);
+						}
+						printf("}, ");
+					}
+				}
+				else
+					printf("%p:%d", branch, branch->num_threads);
+			}
 		}
 	}
 }

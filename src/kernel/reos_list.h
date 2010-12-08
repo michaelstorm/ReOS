@@ -71,7 +71,6 @@ void reos_compoundlist_dump(ReOS_CompoundList *);
 // exported because it's used in compoundlist_detach
 ReOS_CompoundListImpl *reos_compoundlistimpl_clone(ReOS_CompoundListImpl *);
 
-
 long reos_compoundlist_length(ReOS_CompoundList *);
 void reos_compoundlist_push_tail(ReOS_CompoundList *, void *);
 void reos_compoundlist_push_head(ReOS_CompoundList *, void *);

@@ -158,22 +158,82 @@ static int execute_branch(ReOS_Kernel *k, ReOS_Thread *thread, int jmp_pc, int j
 	return 0;
 }
 
-/*static int walk_branch_tree(ReOS_Branch *branch, ReOS_Branch *top_branch)
+static int check_match_list(ReOS_CompoundList *deps, int tabs)
 {
-	if (reos_branch_succeeded(branch)) {
-		if (branch == top_branch || !reos_simplelist_has_next(branch->children))
-			return 1;
-
-		foreach_simple(ReOS_Branch, child, branch->children) {
-			if (!walk_branch_tree(child, top_branch))
-				return 0;
+	printf("{");
+	foreach_compound(ReOS_Branch, d, deps) {
+		if (d->negated)
+			printf("(!)");
+		if (d->marked)
+			printf("(*)");
+		
+		if (d->matched)
+			printf("%p:m, ", d);
+		else
+			printf("%p:%d, ", d, d->num_threads);
+	}
+	printf("}\n");
+	
+	int ret = -1;
+	int i;
+	
+	foreach_compound(ReOS_Branch, b, deps) {
+		for (i = 0; i < tabs; i++)
+			printf("\t");
+		printf("checking ");
+		
+		if (b->negated)
+			printf("(!)");
+		if (b->marked)
+			printf("(*)");
+		
+		if (b->matched)
+			printf("%p:m ", b);
+		else
+			printf("%p:%d ", b, b->num_threads);
+		
+		if (!reos_branch_succeeded(b)) {
+			ret = 0;
+			printf("\n");
+			break;
 		}
-
+		else if (b->marked) {
+			ret = 1;
+			printf("\n");
+			break;
+		}
+		
+		int dep_succeeded = 0;
+		b->marked = 1;
+		
+		assert(reos_compoundlist_length(b->matches) > 0);
+		printf("-> ");
+		foreach_compound(ReOS_CompoundList, match_list, b->matches) {
+			if (check_match_list(match_list, tabs+1)) {
+				dep_succeeded = 1;
+				break;
+			}
+		}
+		
+		b->marked = 0;
+		if (!dep_succeeded) {
+			ret = 0;
+			break;
+		}
+	}
+	
+	for (i = 0; i < tabs; i++)
+		printf("\t");
+	
+	if (ret == -1 || ret == 1) {
+		printf("succeeded\n");
 		return 1;
 	}
-
-	return 0;
-}*/
+	else {
+		printf("failed\n");
+		return 0;
+	}
+}
 
 int execute_standard_inst(ReOS_Kernel *k, ReOS_Thread *thread, ReOS_Inst *inst, int ops)
 {
@@ -194,27 +254,20 @@ int execute_standard_inst(ReOS_Kernel *k, ReOS_Thread *thread, ReOS_Inst *inst, 
 			if (!match_branch->matches)
 				match_branch->matches = new_reos_compoundlist(4, 0, 0);
 			reos_compoundlist_push_tail(match_branch->matches, reos_compoundlist_clone(thread->deps));
-
-	//		if (match_branch->negated)
-		//		return ReOS_InstRetDrop;
-
-			/*ReOS_Branch *top_branch = reos_compoundlist_peek_tail(thread->deps);
-
-			if (!walk_branch_tree(joinroot_get_root_branch(thread->join_root),
-								  top_branch))
-				return ReOS_InstRetDrop;*/
-
-			foreach_compound(ReOS_Branch, b, thread->deps) {
-				if (!reos_branch_succeeded(b))
-					return ReOS_InstRetDrop;
+			
+			foreach_compound(ReOS_CompoundList, match_list, match_branch->matches) {
+				printf("matched %p -> ", match_branch);
+				if (check_match_list(match_list, 1)) {
+					printf("succeeded\n\n");
+					return ReOS_InstRetMatch | ReOS_InstRetDrop;
+				}
 			}
-
-			/*foreach_compound(ReOS_Branch, ref_b, thread->refs) {
-				if (!reos_branch_succeeded(ref_b))
-					return ReOS_InstRetDrop;
-			}*/
+			
+			printf("failed\n\n");
+			return ReOS_InstRetDrop;
 		}
-		return ReOS_InstRetMatch | ReOS_InstRetDrop;
+		else
+			return ReOS_InstRetMatch | ReOS_InstRetDrop;
 
 	case OpJmp:
 		thread->pc = args->x;

@@ -244,6 +244,7 @@ ReOS_Branch *new_reos_branch(int neg)
 	t->num_threads = 0;
 	t->matched = 0;
 	t->negated = neg;
+	t->marked = 0;
 	t->parent = 0;
 	t->children = new_reos_simplelist((VoidPtrFunc)free_reos_branch_tree);
 	t->matches = 0;

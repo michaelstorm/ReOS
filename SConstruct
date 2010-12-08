@@ -17,7 +17,7 @@ def getCacheLineSize():
 
 	if cache_line_size == 0:
 		print \
-"""You decided to optimize for speed, but I can't read your cache line size from
+"""You chose to optimize for speed, but I can't read your cache line size from
 /sys/devices/system/cpu/cpu0/cache/index*. Please tell me what it is, in bytes,
 without the 'b' or 'B' suffix. If you don't know it, try 32 or 64 and see which
 is faster.
@@ -55,7 +55,7 @@ AddOption('--prefix',
 		  default='/usr/local',
 		  help='installation prefix')
 
-vars = Variables()
+vars = Variables(['build.cache'])
 vars.Add(EnumVariable('ARCH', 'integer siz/sys/devices/system/cpu/cpu0/cache/indexe specification', '',
 					  allowed_values = ('', 'unix32', 'unix64', 'win32', 'win64', 'win3.1', 'mac',
 										'lp64', 'llp64', 'ilp32', 'lp32')))
@@ -122,3 +122,5 @@ env.Alias('doc', env.Doxygen('Doxyfile'))
 
 SConscript('examples/SConscript')
 SConscript('tests/SConscript')
+
+vars.Save('build.cache', env)
