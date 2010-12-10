@@ -63,6 +63,9 @@ vars.Add(EnumVariable('ARCH', 'integer siz/sys/devices/system/cpu/cpu0/cache/ind
 vars.Add(EnumVariable('OPTIMIZE', 'optimization preference', '',
 					  allowed_values = ('', 'size', 'size_const_clist', 'speed')))
 
+vars.Add(EnumVariable('DEBUG', 'debug streams', '',
+					  allowed_values = ('branch')))
+
 VariantDir('build', 'src')
 env = Environment(variables = vars,
 				  CPPPATH = includePaths,
@@ -70,6 +73,7 @@ env = Environment(variables = vars,
 				  ENV = os.environ,
 				  ARCH = '${ARCH}',
 				  OPTIMIZE = '${OPTIMIZE}',
+				  DEBUG = '${DEBUG}',
 				  MY_SOURCES = [],
 				  HEADERS = [])
 
@@ -96,6 +100,10 @@ else:
 	cache_line_size = getCacheLineSize()
 	print "Using " + str(cache_line_size) + " byte cache line size"
 	env.Append(CCFLAGS = ['-DOPTIMIZE_FOR_SPEED', '-DCACHE_LINE_SIZE=' + str(cache_line_size)])
+
+if env['DEBUG'] == 'branch':
+    print 'Enabling branch debugging'
+    env.Append(CCFLAGS = ['-DBRANCH_DEBUG'])
 
 env.AddMethod(addHeaders, 'addHeaders')
 env.AddMethod(addSources, 'addSources')

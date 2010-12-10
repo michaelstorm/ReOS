@@ -37,13 +37,12 @@ ReOS_Thread *new_reos_thread(ReOS_CompoundList *free_thread_list, int pc)
 		t = malloc(sizeof(ReOS_Thread));
 		t->free_thread_list = free_thread_list;
 
-		t->refs = 0;
+		t->ref = 0;
 		t->deps = 0;
 	}
 
 	t->pc = pc;
 	t->backref_buffer = 0;
-	t->join_root = 0;
 	return t;
 }
 
@@ -54,15 +53,14 @@ void free_reos_thread(ReOS_Thread *t)
 			reos_captureset_deref(t->capture_set);
 
 		free_reos_backrefbuffer(t->backref_buffer);
-		free_reos_joinroot(t->join_root);
 
 		if (t->deps) {
 			free_reos_compoundlist(t->deps);
 			t->deps = 0;
 		}
-		if (t->refs) {
-			free_reos_compoundlist(t->refs);
-			t->refs = 0;
+		if (t->ref) {
+			reos_branch_strong_deref(t->ref);
+			t->ref = 0;
 		}
 
 		reos_compoundlist_push_tail(t->free_thread_list, t);
@@ -71,25 +69,22 @@ void free_reos_thread(ReOS_Thread *t)
 
 void delete_reos_thread(ReOS_Thread *t)
 {
-	if (t)
-		free(t);
+	free(t);
 }
 
 ReOS_Thread *reos_thread_clone(ReOS_Thread *t)
 {
 	ReOS_Thread *clone = new_reos_thread(t->free_thread_list, t->pc);
 	clone->capture_set = t->capture_set;
-	clone->join_root = t->join_root;
 	clone->backref_buffer = t->backref_buffer;
 	reos_captureset_ref(clone->capture_set);
 
-	if (t->join_root)
-		clone->join_root = joinroot_clone(t->join_root);
-
 	if (t->deps)
 		clone->deps = reos_compoundlist_clone(t->deps);
-	if (t->refs)
-		clone->refs = reos_compoundlist_clone(t->refs);
+	if (t->ref) {
+		reos_branch_strong_ref(t->ref);
+		clone->ref = t->ref;
+	}
 	return clone;
 }
 
@@ -213,43 +208,109 @@ static int thread_alive(ReOS_Thread *t, long gen)
 
 static void thread_ref_branches(ReOS_Thread *t)
 {
-	if (t->refs) {
-		foreach_compound(ReOS_Branch, branch, t->refs)
-			branch->num_threads++;
-	}
+	if (t->ref)
+		t->ref->num_threads++;
 }
 
 static void thread_deref_branches(ReOS_Thread *t)
 {
-	if (t->refs) {
-		foreach_compound(ReOS_Branch, branch, t->refs) {
-			if (branch->num_threads > 0)
-				branch->num_threads--;
-		}
-	}
-}
-
-static void free_reos_branch_tree(ReOS_Branch *branch)
-{
-	if (branch) {
-		free_reos_simplelist(branch->children);
-		free(branch);
+	if (t->ref) {
+		if (t->ref->num_threads > 0)
+			t->ref->num_threads--;
 	}
 }
 
 ReOS_Branch *new_reos_branch(int neg)
 {
-	ReOS_Branch *t = malloc(sizeof(ReOS_Branch));
-	t->refs = 0;
-	t->num_threads = 0;
-	t->matched = 0;
-	t->negated = neg;
-	t->marked = 0;
-	t->parent = 0;
-	t->children = new_reos_simplelist((VoidPtrFunc)free_reos_branch_tree);
-	t->matches = 0;
+	ReOS_Branch *b = malloc(sizeof(ReOS_Branch));
+	b->strong_refs = 0;
+	b->weak_refs = 0;
+	b->num_threads = 0;
+	b->matched = 0;
+	b->negated = neg;
+	b->marked = 0;
+	b->matches = new_reos_compoundlist(4, (VoidPtrFunc)free_reos_compoundlist, 0);
 
-	return t;
+	return b;
+}
+
+static void free_reos_branch(ReOS_Branch *branch)
+{
+	free_reos_compoundlist(branch->matches);
+	free(branch);
+}
+
+/* We can't use simple reference counting with branches, since branches can refer
+   to themselves multiple times in branch->matches. So we use strong and weak
+   references, borrowing terms from the literature and using different definitions,
+   in hope of maximal confusion. Threads have strong references to their ref branch
+   and deps branch list. Branches have weak references to their matches branch
+   list. When a branch's strong reference count reaches zero, it deletes a weak
+   reference to every branch in its matches. This is key to eliminating circular
+   references. When a branch's strong and weak reference counts reach zero, the
+   branch is freed. It is important that free_reos_branch() does not decrement any
+   reference counts, to ensure that we do not create a circle of free() calls.
+   Note that unlike in the literature, both strong and weak references prevent a
+   branch from being freed. The idea is to create a tree in which threads can refer
+   to branches, but branches can only refer to themselves. So the strong reference
+   count is how many threads are directly watching you, while the weak reference
+   count is how many threads are indirectly watching you via other branches. In
+   this way, branch references are not self-sustaining, and killing off threads
+   always results in their dependent branches eventually dying. This tree metaphor
+   is getting a little strong.
+ */
+ReOS_Branch *reos_branch_strong_ref(ReOS_Branch *branch)
+{
+	branch->strong_refs++;
+	return branch;
+}
+
+ReOS_Branch *reos_branch_weak_ref(ReOS_Branch *branch)
+{
+	branch->weak_refs++;
+	return branch;
+}
+
+void reos_branch_strong_deref(ReOS_Branch *branch)
+{
+	branch->strong_refs--;
+	
+	if (branch->strong_refs == 0) {
+		// only free in this function if weak_refs is already zero
+		int del = 0;
+		if (branch->weak_refs == 0)
+			del = 1;
+		
+		// otherwise, it will get freed if it becomes zero through a
+		// circular reference in weak_deref()
+		foreach_compound(ReOS_CompoundList, match_list, branch->matches) {
+			foreach_compound(ReOS_Branch, b, match_list)
+				reos_branch_weak_deref(b);
+		}
+		
+		if (del)
+			free_reos_branch(branch);
+	}
+}
+
+void reos_branch_weak_deref(ReOS_Branch *branch)
+{
+	branch->weak_refs--;
+	if (branch->weak_refs == 0 && branch->strong_refs == 0)
+		free_reos_branch(branch);
+}
+
+void reos_branch_print(ReOS_Branch *b)
+{
+	if (b->negated)
+		printf("(!)");
+	if (b->marked)
+		printf("(*)");
+	
+	if (b->matched)
+		printf("%p:m[%d,%d]", b, b->strong_refs, b->weak_refs);
+	else
+		printf("%p:%d[%d,%d]", b, b->num_threads, b->strong_refs, b->weak_refs);
 }
 
 int reos_branch_alive(ReOS_Branch *branch)
@@ -274,47 +335,4 @@ int reos_branch_succeeded(ReOS_Branch *branch)
 		return 0;
 
 	return 1;
-}
-
-static ReOS_JoinRootImpl *new_reos_joinrootimpl()
-{
-	ReOS_JoinRootImpl *impl = malloc(sizeof(ReOS_JoinRootImpl));
-	impl->refs = 1;
-	impl->root_branch = 0;
-
-	return impl;
-}
-
-ReOS_JoinRoot *new_reos_joinroot(ReOS_Branch *root_branch)
-{
-	ReOS_JoinRoot *root = malloc(sizeof(ReOS_JoinRoot));
-	root->impl = new_reos_joinrootimpl();
-	root->impl->root_branch = root_branch;
-
-	return root;
-}
-
-void free_reos_joinroot(ReOS_JoinRoot *root)
-{
-	if (root) {
-		if (--root->impl->refs == 0) {
-			//free_reos_branch_tree(root->impl->root_branch);
-			free(root->impl);
-		}
-		free(root);
-	}
-}
-
-ReOS_JoinRoot *joinroot_clone(ReOS_JoinRoot *root)
-{
-	ReOS_JoinRoot *clone = malloc(sizeof(ReOS_JoinRoot));
-	clone->impl = root->impl;
-	clone->impl->refs++;
-
-	return clone;
-}
-
-ReOS_Branch *joinroot_get_root_branch(ReOS_JoinRoot *root)
-{
-	return root->impl->root_branch;
 }

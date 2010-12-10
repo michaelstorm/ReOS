@@ -182,17 +182,6 @@ struct ReOS_Capture
 	int partial; //!< True if partial match, false if end has matched
 };
 
-struct ReOS_JoinRoot
-{
-	ReOS_JoinRootImpl *impl;
-};
-
-struct ReOS_JoinRootImpl
-{
-	int refs;
-	ReOS_Branch *root_branch;
-};
-
 struct ReOS_CaptureSet
 {
 	int refs;
@@ -252,13 +241,12 @@ struct ReOS_JudyListImpl
 
 struct ReOS_Branch
 {
-	int refs;
+	int strong_refs;
+	int weak_refs;
 	int num_threads;
 	int matched;
 	int negated;
 	int marked;
-	ReOS_Branch *parent;
-	ReOS_SimpleList *children;
 	ReOS_CompoundList *matches;
 };
 
@@ -273,11 +261,10 @@ struct ReOS_Thread
 	int pc;
 	ReOS_BackrefBuffer *backref_buffer;
 	ReOS_CaptureSet *capture_set;
-	ReOS_JoinRoot *join_root;
 	ReOS_CompoundList *call_stack;
 	ReOS_CompoundList *free_thread_list;
 
-	ReOS_CompoundList *refs;
+	ReOS_Branch *ref;
 	ReOS_CompoundList *deps;
 };
 
@@ -316,6 +303,12 @@ struct ReOS_Debugger
 #else
 #define reos_simplelistiter_has_next reos_simplelistiter_has_next_func
 #define reos_compoundlistiter_has_next reos_compoundlistiter_has_next_func
+#endif
+
+#ifdef BRANCH_DEBUG
+#define BRANCH_DEBUG_DO(A) A
+#else
+#define BRANCH_DEBUG_DO(A)
 #endif
 
 #ifdef __cplusplus

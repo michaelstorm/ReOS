@@ -110,47 +110,35 @@ static int execute_backtrack(ReOS_Kernel *k, ReOS_Thread *thread, int capture_nu
 		return ReOS_InstRetDrop;
 }
 
-static int execute_branch(ReOS_Kernel *k, ReOS_Thread *thread, int jmp_pc, int join_pc,
-						  int negated)
+static int execute_branch(ReOS_Kernel *k, ReOS_Thread *thread, int jmp_pc,
+						int join_pc, int negated)
 {
-	// create refs and deps lists on demand
-	if (!thread->refs)
-		thread->refs = new_reos_compoundlist(4, 0, 0);
-	if (!thread->deps)
-		thread->deps = new_reos_compoundlist(4, 0, 0);
+	// create deps list on demand
+	if (!thread->deps) {
+		thread->deps = new_reos_compoundlist(4, (VoidPtrFunc)reos_branch_strong_deref, (CloneFunc)reos_branch_strong_ref);
+		reos_compoundlist_unshare(thread->deps);
+	}
 
 	ReOS_Thread *join = reos_thread_clone(thread);
 	join->pc = join_pc;
 	thread->pc = jmp_pc;
 
-	// create a new branch
-	ReOS_Branch *child_branch = new_reos_branch(negated);
-
-	// get the branch of the tree that this thread is executing on, or create a
-	// new one if this is the first join
-	ReOS_Branch *current_branch;
-	if (reos_compoundlist_has_next(thread->refs))
-		current_branch = reos_compoundlist_peek_tail(thread->refs);
-	else {
-		current_branch = new_reos_branch(0);
-		reos_compoundlist_push_tail(thread->refs, current_branch);
-		thread->join_root = new_reos_joinroot(current_branch);
+	if (!thread->ref) {
+		thread->ref = new_reos_branch(0);
+		reos_branch_strong_ref(thread->ref);
 	}
+	
+	reos_compoundlist_push_tail(join->deps, thread->ref);
+	reos_branch_strong_ref(thread->ref);
+	
+	if (join->ref)
+		reos_branch_strong_deref(join->ref);
 
-	join->join_root = joinroot_clone(thread->join_root);
+	join->ref = new_reos_branch(negated);
+	reos_branch_strong_ref(join->ref);
 
-	// add the new branch to the tree
-	reos_simplelist_push_tail(current_branch->children, child_branch);
-
-	child_branch->parent = current_branch;
-
-	reos_compoundlist_push_tail(thread->deps, child_branch);
-	reos_compoundlist_push_tail(join->deps, current_branch);
-
-	if (reos_compoundlist_has_next(join->refs))
-		reos_compoundlist_pop_tail(join->refs); // need to free this
-
-	reos_compoundlist_push_tail(join->refs, child_branch);
+	reos_compoundlist_push_tail(thread->deps, join->ref);
+	reos_branch_strong_ref(join->ref);
 
 	reos_threadlist_push_head(k->state.current_thread_list, thread, 0);
 	reos_threadlist_push_head(k->state.current_thread_list, join, 0);
@@ -160,77 +148,74 @@ static int execute_branch(ReOS_Kernel *k, ReOS_Thread *thread, int jmp_pc, int j
 
 static int check_match_list(ReOS_CompoundList *deps, int tabs)
 {
+#ifdef BRANCH_DEBUG
 	printf("{");
 	foreach_compound(ReOS_Branch, d, deps) {
-		if (d->negated)
-			printf("(!)");
-		if (d->marked)
-			printf("(*)");
-		
-		if (d->matched)
-			printf("%p:m, ", d);
-		else
-			printf("%p:%d, ", d, d->num_threads);
+		reos_branch_print(d);
+		printf(", ");
 	}
 	printf("}\n");
+#endif
 	
 	int ret = -1;
-	int i;
 	
 	foreach_compound(ReOS_Branch, b, deps) {
+#ifdef BRANCH_DEBUG
+		int i;
 		for (i = 0; i < tabs; i++)
 			printf("\t");
 		printf("checking ");
 		
-		if (b->negated)
-			printf("(!)");
-		if (b->marked)
-			printf("(*)");
-		
-		if (b->matched)
-			printf("%p:m ", b);
-		else
-			printf("%p:%d ", b, b->num_threads);
+		reos_branch_print(b);
+		printf(" ");
+#endif
 		
 		if (!reos_branch_succeeded(b)) {
 			ret = 0;
-			printf("\n");
+			BRANCH_DEBUG_DO(printf("\n"));
 			break;
 		}
 		else if (b->marked) {
 			ret = 1;
-			printf("\n");
+			BRANCH_DEBUG_DO(printf("\n"));
 			break;
 		}
 		
-		int dep_succeeded = 0;
-		b->marked = 1;
-		
-		assert(reos_compoundlist_length(b->matches) > 0);
-		printf("-> ");
-		foreach_compound(ReOS_CompoundList, match_list, b->matches) {
-			if (check_match_list(match_list, tabs+1)) {
-				dep_succeeded = 1;
+		if (!b->negated) {
+			int dep_succeeded = 0;
+			b->marked = 1;
+			
+			assert(reos_compoundlist_length(b->matches) > 0);
+			BRANCH_DEBUG_DO(printf("-> "));
+			foreach_compound(ReOS_CompoundList, match_list, b->matches) {
+				if (check_match_list(match_list, tabs+1)) {
+					dep_succeeded = 1;
+					break;
+				}
+			}
+			
+			b->marked = 0;
+			if (!dep_succeeded) {
+				ret = 0;
 				break;
 			}
 		}
-		
-		b->marked = 0;
-		if (!dep_succeeded) {
-			ret = 0;
-			break;
-		}
+		else
+			BRANCH_DEBUG_DO(printf("\n"));
 	}
-	
+
+#ifdef BRANCH_DEBUG	
+	int i;
 	for (i = 0; i < tabs; i++)
-		printf("\t");
+		BRANCH_DEBUG_DO(printf("\t"));
+#endif
 	
 	if (ret == -1 || ret == 1) {
-		printf("succeeded\n");
+		BRANCH_DEBUG_DO(printf("succeeded\n"));
 		return 1;
 	}
 	else {
-		printf("failed\n");
+		BRANCH_DEBUG_DO(printf("failed\n"));
 		return 0;
 	}
 }
@@ -247,23 +232,26 @@ int execute_standard_inst(ReOS_Kernel *k, ReOS_Thread *thread, ReOS_Inst *inst, 
 			return ReOS_InstRetConsume;
 
 	case OpMatch:
-		if (thread->refs) {
-			ReOS_Branch *match_branch = reos_compoundlist_peek_tail(thread->refs);
-			match_branch->matched = 1;
+		if (thread->ref) {
+			thread->ref->matched = 1;
 			
-			if (!match_branch->matches)
-				match_branch->matches = new_reos_compoundlist(4, 0, 0);
-			reos_compoundlist_push_tail(match_branch->matches, reos_compoundlist_clone(thread->deps));
+			ReOS_CompoundList *deps_clone = reos_compoundlist_clone_with_func(thread->deps, (CloneFunc)reos_branch_weak_ref);
+			deps_clone->impl->clone_element = (CloneFunc)reos_branch_weak_ref;
+			deps_clone->impl->destructor = 0;
+			reos_compoundlist_push_tail(thread->ref->matches, deps_clone);
 			
-			foreach_compound(ReOS_CompoundList, match_list, match_branch->matches) {
-				printf("matched %p -> ", match_branch);
+			foreach_compound(ReOS_CompoundList, match_list, thread->ref->matches) {
+				BRANCH_DEBUG_DO(printf("matched "));
+				BRANCH_DEBUG_DO(reos_branch_print(thread->ref));
+				BRANCH_DEBUG_DO(printf(" -> "));
+				
 				if (check_match_list(match_list, 1)) {
-					printf("succeeded\n\n");
+					BRANCH_DEBUG_DO(printf("succeeded\n\n"));
 					return ReOS_InstRetMatch | ReOS_InstRetDrop;
 				}
 			}
 			
-			printf("failed\n\n");
+			BRANCH_DEBUG_DO(printf("failed\n\n"));
 			return ReOS_InstRetDrop;
 		}
 		else

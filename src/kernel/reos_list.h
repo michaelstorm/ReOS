@@ -66,6 +66,8 @@ void *reos_simplelistiter_peek_next(ReOS_SimpleListIter *);
 ReOS_CompoundList *new_reos_compoundlist(int, VoidPtrFunc, CloneFunc);
 int free_reos_compoundlist(ReOS_CompoundList *);
 ReOS_CompoundList *reos_compoundlist_clone(ReOS_CompoundList *);
+ReOS_CompoundList *reos_compoundlist_clone_with_func(ReOS_CompoundList *, CloneFunc);
+void reos_compoundlist_unshare(ReOS_CompoundList *);
 void reos_compoundlist_dump(ReOS_CompoundList *);
 
 // exported because it's used in compoundlist_detach

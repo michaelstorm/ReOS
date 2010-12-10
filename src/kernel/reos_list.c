@@ -393,18 +393,34 @@ void *reos_simplelistiter_peek_next(ReOS_SimpleListIter *iter)
  * \memberof ReOS_CompoundList
  */
 ReOS_CompoundList *new_reos_compoundlist(int len, VoidPtrFunc destructor,
-							   CloneFunc clone_element)
+							CloneFunc clone_element)
 {
 	ReOS_CompoundList *l = malloc(sizeof(ReOS_CompoundList));
 	l->impl = new_reos_compoundlistimpl(len, destructor, clone_element);
 	return l;
 }
 
-static ReOS_CompoundListImpl *new_reos_compoundlistimpl(int len, VoidPtrFunc destructor,
-											  CloneFunc clone_element)
+static ReOS_CompoundListImpl *new_reos_compoundlistimpl_no_head(int len,
+								VoidPtrFunc destructor,
+								 CloneFunc clone_element)
 {
 	ReOS_CompoundListImpl *impl = malloc(sizeof(ReOS_CompoundListImpl));
 	impl->refs = 1;
+	impl->head = 0;
+	impl->tail = 0;
+	impl->free_head = 0;
+	impl->destructor = destructor;
+	impl->clone_element = clone_element;
+	return impl;
+}
+
+static ReOS_CompoundListImpl *new_reos_compoundlistimpl(int len,
+							VoidPtrFunc destructor,
+							CloneFunc clone_element)
+{
+	ReOS_CompoundListImpl *impl = new_reos_compoundlistimpl_no_head(len,
+									destructor,
+									clone_element);
 
 #ifdef OPTIMIZE_FOR_SIZE
 	impl->head = new_reos_compoundlistnode(len);
@@ -413,10 +429,6 @@ static ReOS_CompoundListImpl *new_reos_compoundlistimpl(int len, VoidPtrFunc des
 #endif
 
 	impl->tail = impl->head;
-
-	impl->free_head = 0;
-	impl->destructor = destructor;
-	impl->clone_element = clone_element;
 	return impl;
 }
 
@@ -559,10 +571,29 @@ ReOS_CompoundList *reos_compoundlist_clone(ReOS_CompoundList *l)
 	return clone;
 }
 
+ReOS_CompoundList *reos_compoundlist_clone_with_func(ReOS_CompoundList *l, CloneFunc func)
+{
+	ReOS_CompoundList *clone = malloc(sizeof(ReOS_CompoundList));
+	if (l->impl->refs != -1) {
+		clone->impl = l->impl;
+		clone->impl->refs++;
+	}
+	else {
+		CloneFunc old_func = l->impl->clone_element;
+		l->impl->clone_element = func;
+		clone->impl = reos_compoundlistimpl_clone(l->impl);
+		l->impl->clone_element = old_func;
+		clone->impl->refs = -1;
+	}
+
+	return clone;
+}
+
 ReOS_CompoundListImpl *reos_compoundlistimpl_clone(ReOS_CompoundListImpl *impl)
 {
-	ReOS_CompoundListImpl *clone_impl = new_reos_compoundlistimpl(CLIST_MAX_LEN(impl->head), impl->destructor,
-												 impl->clone_element);
+	ReOS_CompoundListImpl *clone_impl = new_reos_compoundlistimpl_no_head(CLIST_MAX_LEN(impl->head),
+									      impl->destructor,
+									      impl->clone_element);
 
 	ReOS_CompoundListNode *clone_prev;
 	ReOS_CompoundListNode *clone_node = 0;
@@ -610,6 +641,15 @@ static ReOS_CompoundListNode *reos_compoundlistnode_clone(ReOS_CompoundListNode 
 			   sizeof(void *)*(node->len - node->pos));
 
 	return clone_node;
+}
+
+void reos_compoundlist_unshare(ReOS_CompoundList *l)
+{
+	if (l->impl->refs > 1) {
+		l->impl->refs--;
+		l->impl = reos_compoundlistimpl_clone(l->impl);
+	}
+	l->impl->refs = -1;
 }
 
 /**

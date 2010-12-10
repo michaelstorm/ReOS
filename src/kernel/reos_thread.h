@@ -20,13 +20,13 @@ void reos_threadlist_push_tail(ReOS_ThreadList *, ReOS_Thread *, int);
 ReOS_Thread *reos_threadlist_pop_head(ReOS_ThreadList *);
 
 ReOS_Branch *new_reos_branch(int);
+ReOS_Branch *reos_branch_strong_ref(ReOS_Branch *);
+ReOS_Branch *reos_branch_weak_ref(ReOS_Branch *);
+void reos_branch_strong_deref(ReOS_Branch *);
+void reos_branch_weak_deref(ReOS_Branch *);
+void reos_branch_print(ReOS_Branch *);
 int reos_branch_alive(ReOS_Branch *);
 int reos_branch_succeeded(ReOS_Branch *);
-
-ReOS_JoinRoot *new_reos_joinroot(ReOS_Branch *);
-void free_reos_joinroot(ReOS_JoinRoot *);
-ReOS_JoinRoot *joinroot_clone(ReOS_JoinRoot *);
-ReOS_Branch *joinroot_get_root_branch(ReOS_JoinRoot *);
 
 #ifdef __cplusplus
 }
