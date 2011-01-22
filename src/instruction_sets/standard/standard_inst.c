@@ -110,8 +110,49 @@ static int execute_backtrack(ReOS_Kernel *k, ReOS_Thread *thread, int capture_nu
 		return ReOS_InstRetDrop;
 }
 
+/**
+ * Hokay, this is probably as good a place as any to describe the branchng
+ * algorithm. Here, "branching" refers to positive and negative lookahead.
+ * Note that this algorithm only applies to look*ahead*; lookbehind is a
+ * different beast entirely, since this is an automaton-driven model. As such, please
+ * forget the phrase "zero-width assertion". The fact that lookaround needs to be
+ * "zero-width" is an artifact of Perl's backtracking implementation, and has no meaning
+ * here. As it turns out, lookahead without backtracking is harder than it first looks.
+ * 
+ * What you're doing is saying that two things are true at once - the normal regular
+ * expression and the lookahead expression. They must match exactly the same
+ * input characters to succeed. For example, '(?=[a-c]+)[b-d]+' is equivalent to
+ * '(b|c)+', '(?=(a.)+)(.b)+' is the same as '(ab)+', and '(?!a+)b+' is just 'b+'.
+ * Many people learn to use lookahead because it allows them to match strings
+ * without "grabbing" an unnecessary tail, e.g. '\w+(?!,)' to match all words not
+ * followed by a comma. This is an irrelevant implementation detail, but nevertheless
+ * a technique in common use.
+ *
+ * Lookaround is actually an operation performed on regular
+ * expressions called intersection, just like Kleene star ('a*') or concatenation
+ * ('ab'). Also like those other operations, regular expressions are closed under
+ * intersection, meaning that we can intersect any number of regular expressions together
+ * and they'll still describe a regular language (the formal analogue of a regular
+ * expression)! So for any regex you give me using lookaround, I can give you an
+ * equivalent regex without it.
+ *
+ * So why don't we just build that equivalent regular
+ * expression, and not have to deal with a new algorithm? Because in the worst case,
+ * that regex could be *really complicated*. If the original regex took n characters
+ * to write, the new one could take as many as 2^(2^n) characters. Even if we skipped
+ * the regex-writing step and just built the automaton by intersecting the lookahead automata
+ * with the normal one, it could have n^k states, where n is the size of the biggest original
+ * automaton and k is the number of automata. This is because we could end up creating a new
+ * state for every possible combination of states in all the automata we're intersecting. If
+ * this explanation doesn't make sense to you, don't worry about it, I'm just laying out what
+ * the naive alternative to our algorithm would be. It would be bad. Plus, if a regex engine
+ * implementor creates a non-automatony instruction, said instruction might not play nicely
+ * with the aforementioned Thompson construction.
+ *
+ * 
+ */
 static int execute_branch(ReOS_Kernel *k, ReOS_Thread *thread, int jmp_pc,
-						int join_pc, int negated)
+						int branch_pc, int negated)
 {
 	// create deps list on demand
 	if (!thread->deps) {
@@ -119,8 +160,8 @@ static int execute_branch(ReOS_Kernel *k, ReOS_Thread *thread, int jmp_pc,
 		reos_compoundlist_unshare(thread->deps);
 	}
 
-	ReOS_Thread *join = reos_thread_clone(thread);
-	join->pc = join_pc;
+	ReOS_Thread *branch_thread = reos_thread_clone(thread);
+	branch_thread->pc = branch_pc;
 	thread->pc = jmp_pc;
 
 	if (!thread->ref) {
@@ -128,20 +169,20 @@ static int execute_branch(ReOS_Kernel *k, ReOS_Thread *thread, int jmp_pc,
 		reos_branch_strong_ref(thread->ref);
 	}
 	
-	reos_compoundlist_push_tail(join->deps, thread->ref);
+	reos_compoundlist_push_tail(branch_thread->deps, thread->ref);
 	reos_branch_strong_ref(thread->ref);
 	
-	if (join->ref)
-		reos_branch_strong_deref(join->ref);
+	if (branch_thread->ref)
+		reos_branch_strong_deref(branch_thread->ref);
 
-	join->ref = new_reos_branch(negated);
-	reos_branch_strong_ref(join->ref);
+	branch_thread->ref = new_reos_branch(negated);
+	reos_branch_strong_ref(branch_thread->ref);
 
-	reos_compoundlist_push_tail(thread->deps, join->ref);
-	reos_branch_strong_ref(join->ref);
+	reos_compoundlist_push_tail(thread->deps, branch_thread->ref);
+	reos_branch_strong_ref(branch_thread->ref);
 
 	reos_threadlist_push_head(k->state.current_thread_list, thread, 0);
-	reos_threadlist_push_head(k->state.current_thread_list, join, 0);
+	reos_threadlist_push_head(k->state.current_thread_list, branch_thread, 0);
 
 	return 0;
 }
@@ -207,7 +248,7 @@ static int check_match_list(ReOS_CompoundList *deps, int tabs)
 #ifdef BRANCH_DEBUG	
 	int i;
 	for (i = 0; i < tabs; i++)
-		BRANCH_DEBUG_DO(printf("\t"));
+		printf("\t");
 #endif
 	
 	if (ret == -1 || ret == 1) {

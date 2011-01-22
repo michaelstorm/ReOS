@@ -89,22 +89,6 @@ void reos_kernel_push_next_threadlist(ReOS_Kernel *k, ReOS_Thread *thread, int b
 	push_threadlist(k, k->state.next_thread_list, thread, backtrack);
 }
 
-void reos_kernel_process_inst_ret(ReOS_Kernel *k, ReOS_Thread *thread, int inst_ret)
-{
-	if (inst_ret & ReOS_InstRetConsume) {
-		thread->pc++;
-		reos_kernel_push_next_threadlist(k, thread, (inst_ret & ReOS_InstRetBacktrack) ? 1 : 0);
-	}
-
-	if (inst_ret & ReOS_InstRetStep) {
-		thread->pc++;
-		reos_kernel_push_current_threadlist(k, thread, (inst_ret & ReOS_InstRetBacktrack) ? 1 : 0);
-	}
-
-	if (inst_ret & ReOS_InstRetDrop)
-		free_reos_thread(thread);
-}
-
 int reos_kernel_step_instruction(ReOS_Kernel *k, ReOS_Thread *thread, ReOS_Inst *inst, int ops)
 {
 	int inst_ret = k->execute_inst(k, thread, inst, ops);
@@ -117,7 +101,18 @@ int reos_kernel_step_instruction(ReOS_Kernel *k, ReOS_Thread *thread, ReOS_Inst 
 		inst_ret |= reos_kernel_save_captureset(k, thread->capture_set);
 	}
 
-	reos_kernel_process_inst_ret(k, thread, inst_ret);
+	if (inst_ret & ReOS_InstRetConsume) {
+		thread->pc++;
+		reos_kernel_push_next_threadlist(k, thread, (inst_ret & ReOS_InstRetBacktrack) ? 1 : 0);
+	}
+
+	if (inst_ret & ReOS_InstRetStep) {
+		thread->pc++;
+		reos_kernel_push_current_threadlist(k, thread, (inst_ret & ReOS_InstRetBacktrack) ? 1 : 0);
+	}
+
+	if (inst_ret & ReOS_InstRetDrop)
+		free_reos_thread(thread);
 	return inst_ret;
 }
 

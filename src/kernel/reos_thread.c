@@ -262,18 +262,27 @@ static void free_reos_branch(ReOS_Branch *branch)
 ReOS_Branch *reos_branch_strong_ref(ReOS_Branch *branch)
 {
 	branch->strong_refs++;
+	printf("strong ref ");
+	reos_branch_print(branch);
+	printf("\n");
 	return branch;
 }
 
 ReOS_Branch *reos_branch_weak_ref(ReOS_Branch *branch)
 {
 	branch->weak_refs++;
+	printf("weak ref ");
+	reos_branch_print(branch);
+	printf("\n");
 	return branch;
 }
 
 void reos_branch_strong_deref(ReOS_Branch *branch)
 {
 	branch->strong_refs--;
+	printf("strong deref ");
+	reos_branch_print(branch);
+	printf("\n");
 	
 	if (branch->strong_refs == 0) {
 		// only free in this function if weak_refs is already zero
@@ -296,6 +305,9 @@ void reos_branch_strong_deref(ReOS_Branch *branch)
 void reos_branch_weak_deref(ReOS_Branch *branch)
 {
 	branch->weak_refs--;
+	printf("weak deref ");
+	reos_branch_print(branch);
+	printf("\n");
 	if (branch->weak_refs == 0 && branch->strong_refs == 0)
 		free_reos_branch(branch);
 }

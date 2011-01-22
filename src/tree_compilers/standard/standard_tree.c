@@ -271,7 +271,7 @@ int standard_tree_node_compile(ReOS_Pattern *pattern, int index, TreeNode *node,
 
 	/*
 		(?=e1):
-			join L1, L2
+			branch L1, L2
 			L1: codes for e1
 				match
 			L2:
@@ -283,17 +283,17 @@ int standard_tree_node_compile(ReOS_Pattern *pattern, int index, TreeNode *node,
 		ReOS_Inst *match_inst = inst_factory(OpMatch);
 		pattern->set_inst(pattern, match_inst, next);
 
-		ReOS_Inst *join_inst = inst_factory(OpBranch);
-		StandardInstArgs *join_inst_args = (StandardInstArgs *)join_inst->args;
-		join_inst_args->x = index+1;
-		join_inst_args->y = next+1;
-		pattern->set_inst(pattern, join_inst, index);
+		ReOS_Inst *branch_inst = inst_factory(OpBranch);
+		StandardInstArgs *branch_inst_args = (StandardInstArgs *)branch_inst->args;
+		branch_inst_args->x = index+1;
+		branch_inst_args->y = next+1;
+		pattern->set_inst(pattern, branch_inst, index);
 		return next+1;
 	}
 
 	/*
 		(?!e1):
-			neg-join L1, L2
+			neg-branch L1, L2
 			L1: codes for e1
 				match
 			L2:
@@ -305,12 +305,12 @@ int standard_tree_node_compile(ReOS_Pattern *pattern, int index, TreeNode *node,
 		ReOS_Inst *match_inst = inst_factory(OpMatch);
 		pattern->set_inst(pattern, match_inst, next);
 
-		ReOS_Inst *negjoin_inst = inst_factory(OpNegBranch);
-		StandardInstArgs *negjoin_inst_args =
-				(StandardInstArgs *)negjoin_inst->args;
-		negjoin_inst_args->x = index+1;
-		negjoin_inst_args->y = next+1;
-		pattern->set_inst(pattern, negjoin_inst, index);
+		ReOS_Inst *negbranch_inst = inst_factory(OpNegBranch);
+		StandardInstArgs *negbranch_inst_args =
+				(StandardInstArgs *)negbranch_inst->args;
+		negbranch_inst_args->x = index+1;
+		negbranch_inst_args->y = next+1;
+		pattern->set_inst(pattern, negbranch_inst, index);
 		return next+1;
 	}
 
